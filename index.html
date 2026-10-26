@@ -24,8 +24,62 @@ document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.query
 function shuffle(a){return [...a].sort(()=>Math.random()-.5)}
 $('startquiz').onclick=()=>{let pool=words.filter(w=>w.definition_en.trim());if($('qsource').value==='mistakes'){const bad=new Set(attempts.filter(a=>!a.correct).map(a=>a.word_id));pool=pool.filter(w=>bad.has(w.id))}if(pool.length<4){notify('至少需要 4 個有英文定義的單字才能開始測驗。',true);return}quiz=shuffle(pool).slice(0,Math.min(Number($('qcount').value),pool.length));qIndex=0;qScore=0;showQuestion()};
 function showQuestion(){const box=$('quizbox');if(qIndex>=quiz.length){box.innerHTML=`<h2>Quiz completed!</h2><p>Your score: ${qScore} / ${quiz.length}</p>`;return}const target=quiz[qIndex];const distractors=shuffle(words.filter(w=>w.id!==target.id&&w.definition_en.trim())).slice(0,3);const options=shuffle([target,...distractors]);locked=false;box.innerHTML=`<p class="muted">Question ${qIndex+1} / ${quiz.length}</p><h2>What is the meaning of “${esc(target.word)}”?</h2><div id="choices">${options.map(w=>`<button class="quiz-option" data-answer="${w.id}">${esc(w.definition_en)}</button>`).join('')}</div><div id="feedback"></div>`;box.querySelectorAll('[data-answer]').forEach(b=>b.onclick=()=>answer(b,target))}
-async function answer(button,target){if(locked)return;locked=true;const correct=button.dataset.answer===target.id;const selected=words.find(w=>w.id===button.dataset.answer);$('quizbox').querySelectorAll('[data-answer]').forEach(b=>{b.disabled=true;if(b.dataset.answer===target.id)b.classList.add('correct');else if(b===button)b.classList.add('wrong')});$('feedback').innerHTML=`<p>${correct?'Correct!':'Not quite.'} ${esc(target.word)}: ${esc(target.definition_en)}</p><button id="nextq" disabled>Saving result…</button>`;try{await api('attempts','POST',{word_id:target.id,correct,answer:selected?.definition_en||'',question:'What is the meaning of '+target.word+'?'});if(correct)qScore++;await refresh(true);$('nextq').disabled=false;$('nextq').textContent='Next question';$('nextq').onclick=()=>{qIndex++;showQuestion()}}catch(err){$('feedback').innerHTML+=`<p class="notice error">測驗紀錄未儲存：${esc(err.message)}。請檢查網路後重試。</p><button id="retry">Retry saving</button>`;$('retry').onclick=()=>{locked=false;answer(button,target)}}}
-function parseCSV(text){const rows=[];let row=[],cell='',quoted=false;for(let i=0;i<text.length;i++){const c=text[i];if(c==='"'){if(quoted&&text[i+1]==='"'){cell+='"';i++}else quoted=!quoted}else if(c===','&&!quoted){row.push(cell);cell=''}else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cell);if(row.some(x=>x.trim()))rows.push(row);row=[];cell=''}else cell+=c}row.push(cell);if(row.some(x=>x.trim()))rows.push(row);return rows}
+async function answer(button,target){if(locked)return;locked=true;const correct=button.dataset.answer===target.id;const selected=words.find(w=>w.id===button.dataset.answer);$('quizbox').querySelectorAll('[data-answer]').forEach(b=>{b.disabled=true;if(b.dataset.answer===target.id)b.classList.add('correct');else if(b===button)b.classList.add('wrong')});$('feedback').innerHTML =
+  quizExplanation(target, selected, correct) +
+  '<button id="nextq" disabled>Saving result…</button>';'Correct!':'Not quite.'} ${esc(target.word)}: ${esc(target.definition_en)}</p><button id="nextq" disabled>Saving result…</button>`;try{await api('attempts','POST',{word_id:target.id,correct,answer:selected?.definition_en||'',question:'What is the meaning of '+target.word+'?'});if(correct)qScore++;await refresh(true);$('nextq').disabled=false;$('nextq').textContent='Next question';$('nextq').onclick=()=>{qIndex++;showQuestion()}}catch(err){$('feedback').innerHTML+=`<p class="notice error">測驗紀錄未儲存：${esc(err.message)}。請檢查網路後重試。</p><button id="retry">Retry saving</button>`;$('retry').onclick=()=>{locked=false;answer(button,target)}}}
+function quizExplanation(target, selected, correct) {
+  const other = selected && selected.id !== target.id
+    ? `<p><strong>你選擇的答案：</strong>
+       ${esc(selected.definition_en || '—')}
+       （${esc(selected.word)}：
+       ${esc(selected.meaning_zh || '尚未填寫中文解釋')}）
+       </p>`
+    : '';
+
+  const example = target.example_en
+    ? `<p><strong>英文例句：</strong>
+       ${esc(target.example_en)}</p>`
+    : '';
+
+  const translation = target.example_zh
+    ? `<p><strong>例句中文翻譯：</strong>
+       ${esc(target.example_zh)}</p>`
+    : '';
+
+  return `
+    <div style="
+      margin-top:16px;
+      padding:18px;
+      background:#f0f6ff;
+      border:1px solid #d3e1fa;
+      border-radius:12px;
+      line-height:1.8;
+    ">
+      <h3>${correct ? '✓ 答對了！' : '✗ 答錯了，中文解析'}</h3>
+
+      <p><strong>正確單字：</strong>
+      ${esc(target.word)}</p>
+
+      <p><strong>詞性：</strong>
+      ${esc(target.part_of_speech || '未填寫')}</p>
+
+      <p><strong>中文意思：</strong>
+      ${esc(target.meaning_zh || '未填寫')}</p>
+
+      <p><strong>英文定義：</strong>
+      ${esc(target.definition_en || '未填寫')}</p>
+
+      ${other}
+      ${example}
+      ${translation}
+
+      <p style="color:#69758d;font-size:13px">
+        解析依據雲端單字庫資料顯示。
+        可以在單字管理補充例句及中文翻譯。
+      </p>
+    </div>
+  `;
+}function parseCSV(text){const rows=[];let row=[],cell='',quoted=false;for(let i=0;i<text.length;i++){const c=text[i];if(c==='"'){if(quoted&&text[i+1]==='"'){cell+='"';i++}else quoted=!quoted}else if(c===','&&!quoted){row.push(cell);cell=''}else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cell);if(row.some(x=>x.trim()))rows.push(row);row=[];cell=''}else cell+=c}row.push(cell);if(row.some(x=>x.trim()))rows.push(row);return rows}
 $('import').onclick=async()=>{const file=$('csvfile').files[0];if(!file){notify('請先選擇 CSV 檔案。',true);return}const rows=parseCSV((await file.text()).replace(/^\uFEFF/,''));if(rows.length<2){notify('CSV 沒有可匯入的資料。',true);return}const keys=rows.shift().map(s=>s.trim().toLowerCase());if(!keys.includes('word')||!keys.includes('meaning_zh')){notify('CSV 必須包含 word 與 meaning_zh 欄位。',true);return}let ok=0,skip=0,fail=0;const known=new Set(words.map(w=>w.word.trim().toLowerCase()));$('import').disabled=true;for(const r of rows){const obj=Object.fromEntries(keys.map((k,i)=>[k,r[i]||'']));if(!obj.word?.trim()||!obj.meaning_zh?.trim()||known.has(obj.word.trim().toLowerCase())){skip++;continue}try{await api('words','POST',{word:obj.word,meaning_zh:obj.meaning_zh,definition_en:obj.definition_en||'',example_en:obj.example_en||'',example_zh:obj.example_zh||'',part_of_speech:obj.part_of_speech||'',category:obj.category||obj.notes||''});known.add(obj.word.trim().toLowerCase());ok++}catch{fail++}}$('import').disabled=false;await refresh(true);notify(`匯入完成：成功 ${ok} 筆、略過 ${skip} 筆、失敗 ${fail} 筆。`,fail>0)};
 function download(filename,content,type){const blob=new Blob([content],{type});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 $('exportjson').onclick=()=>download('my-vocabulary-bank-backup.json',JSON.stringify({exported_at:new Date().toISOString(),words,attempts},null,2),'application/json');$('exportcsv').onclick=()=>{const keys=['word','meaning_zh','definition_en','example_en','example_zh','part_of_speech','category','created_at','updated_at'];const csv=[keys,...words.map(w=>keys.map(k=>w[k]||''))].map(row=>row.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');download('my-vocabulary-bank.csv','\uFEFF'+csv,'text/csv;charset=utf-8')};
