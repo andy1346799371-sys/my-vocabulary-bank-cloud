@@ -27,7 +27,7 @@ function showQuestion(){const box=$('quizbox');if(qIndex>=quiz.length){box.inner
 async function answer(button,target){if(locked)return;locked=true;const correct=button.dataset.answer===target.id;const selected=words.find(w=>w.id===button.dataset.answer);$('quizbox').querySelectorAll('[data-answer]').forEach(b=>{b.disabled=true;if(b.dataset.answer===target.id)b.classList.add('correct');else if(b===button)b.classList.add('wrong')});$('feedback').innerHTML =
   quizExplanation(target, selected, correct) +
   '<button id="nextq" disabled>Saving result…</button>';
-try {{await api('attempts','POST',{word_id:target.id,correct,answer:selected?.definition_en||'',question:'What is the meaning of '+target.word+'?'});if(correct)qScore++;await refresh(true);$('nextq').disabled=false;$('nextq').textContent='Next question';$('nextq').onclick=()=>{qIndex++;showQuestion()}}catch(err){$('feedback').innerHTML+=`<p class="notice error">測驗紀錄未儲存：${esc(err.message)}。請檢查網路後重試。</p><button id="retry">Retry saving</button>`;$('retry').onclick=()=>{locked=false;answer(button,target)}}}
+try {await api('attempts','POST',{word_id:target.id,correct,answer:selected?.definition_en||'',question:'What is the meaning of '+target.word+'?'});if(correct)qScore++;await refresh(true);$('nextq').disabled=false;$('nextq').textContent='Next question';$('nextq').onclick=()=>{qIndex++;showQuestion()}}catch(err){$('feedback').innerHTML+=`<p class="notice error">測驗紀錄未儲存：${esc(err.message)}。請檢查網路後重試。</p><button id="retry">Retry saving</button>`;$('retry').onclick=()=>{locked=false;answer(button,target)}}}
 function quizExplanation(target, selected, correct) {
   const other = selected && selected.id !== target.id
     ? `<p><strong>你選擇的答案：</strong>
